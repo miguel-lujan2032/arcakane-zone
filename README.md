@@ -1,67 +1,127 @@
 # Arkane Zone
 
-Sistema web de gestión de una tienda de videojuegos, desarrollado con **Django 5.2**. Incluye catálogo, carrito, pedidos, pagos, reportes y soporte al cliente, con panel de administración personalizado (django-unfold).
+Sistema de gestión para una tienda de videojuegos. El proyecto está organizado como un **monorepo** con dos aplicaciones independientes:
 
-## Módulos
+| Carpeta | Aplicación | Estado |
+|---|---|---|
+| [`backend/`](backend/README.md) | Aplicación Django 5.2 (dominio, administración y base de datos; API JSON planificada) | Funcional |
+| [`frontend/`](frontend/README.md) | Aplicación Next.js (interfaz de usuario) | Pendiente de implementación |
 
-| App | Descripción |
-|-----|-------------|
-| `cuentas` | Usuarios con modelo personalizado (`Usuario`) y roles |
-| `catalogo` | Videojuegos, categorías, géneros y plataformas |
-| `pedidos` | Carrito de compras, pedidos y cancelación |
-| `pagos` | Pagos y ventas |
-| `reportes` | Reportes del negocio |
-| `soporte` | Formulario de contacto / soporte |
+> **Nota de transición:** hoy el backend sigue sirviendo la interfaz con Django Templates + HTMX para no romper la aplicación existente. Cuando se implemente el frontend en Next.js, esa interfaz se reemplazará por una API JSON. La carpeta `backend/templates/` es, por tanto, temporal.
+
+## Estructura del repositorio
+
+```text
+arcakane-zone/
+├── backend/                 # Aplicación Django
+│   ├── arkane_zone/         # Configuración del proyecto (settings, urls, wsgi/asgi)
+│   ├── catalogo/            # Catálogo de videojuegos
+│   ├── cuentas/             # Usuarios, roles y autenticación
+│   ├── pedidos/             # Carrito, pedidos y cancelación
+│   ├── pagos/               # Pago simulado y ventas
+│   ├── reportes/            # Dashboard y reportes
+│   ├── soporte/             # Contacto y ayuda
+│   ├── templates/           # Interfaz Django temporal (se reemplazará con Next.js)
+│   ├── tests/               # Suite de pruebas con pytest
+│   ├── manage.py
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   ├── build.sh
+│   └── .env.example
+├── frontend/                # Aplicación Next.js (pendiente)
+│   └── README.md
+├── docs/                    # Auditoría, plan de sprint y diagramas
+├── render.yaml              # Blueprint de Render (rootDir: backend)
+├── .gitignore
+└── README.md
+```
 
 ## Tecnologías
 
-- Python 3.12, Django 5.2
-- PostgreSQL (`psycopg2`) vía `DATABASE_URL`
-- django-unfold (admin), WhiteNoise (estáticos), Gunicorn
-- Almacenamiento de medios opcional en S3 compatible (`boto3`, `django-storages`)
-- Pytest para pruebas
-- Despliegue en Render (`render.yaml`, `build.sh`)
+| Capa | Tecnología |
+|---|---|
+| Backend | Python 3.12, Django 5.2, django-environ, django-unfold |
+| Base de datos | PostgreSQL (`psycopg2`) vía `DATABASE_URL`; SQLite para pruebas |
+| Servidor / estáticos | Gunicorn, WhiteNoise |
+| Almacenamiento de medios | Sistema de archivos local o S3 compatible (`boto3`, `django-storages`) |
+| Frontend actual | Django Templates, Tailwind CSS (CDN), HTMX 2.0.4 |
+| Frontend objetivo | Next.js (pendiente) |
+| Pruebas | Pytest + pytest-django |
+| Despliegue | Render (`render.yaml`, `build.sh`) |
 
-## Instalación local
+## Inicio rápido
+
+### Backend
 
 ```bash
-git clone https://github.com/MiguelH/NOMBRE-DEL-REPO.git
-cd NOMBRE-DEL-REPO
-
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+cd backend
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env          # y completa los valores
+cp .env.example .env             # completar SECRET_KEY y DATABASE_URL
 python manage.py migrate
-python manage.py seed_catalogo   # datos de ejemplo del catálogo
+python manage.py seed_catalogo
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-## Variables de entorno
+La aplicación queda disponible en `http://127.0.0.1:8000/` y el admin en `http://127.0.0.1:8000/admin/`.
 
-Se configuran en un archivo `.env` (no se sube al repositorio). Ver `.env.example`.
+Instrucciones detalladas, variables de entorno, pruebas y despliegue: [`backend/README.md`](backend/README.md).
 
-| Variable | Obligatoria | Descripción |
-|----------|-------------|-------------|
-| `SECRET_KEY` | Sí | Clave secreta de Django |
-| `DATABASE_URL` | Sí | Ej: `postgres://usuario:clave@host:5432/db` |
-| `DEBUG` | No | `True` en desarrollo (por defecto `False`) |
-| `ALLOWED_HOSTS` | No | Lista separada por comas |
-| `AWS_*` | No | Solo si usas almacenamiento S3 para medios |
+### Frontend
 
-## Pruebas
+La aplicación Next.js todavía no existe. La carpeta [`frontend/`](frontend/README.md) contiene la propuesta de estructura, convenciones y pasos de integración para el siguiente issue.
 
-Las pruebas usan SQLite en memoria (`settings_test.py`), así que no tocan tu base de datos real.
+## Arquitectura
 
-```bash
-pytest
+```mermaid
+flowchart LR
+  B[Navegador] -->|HTTPS| R[Render]
+  R --> G[Gunicorn]
+  G --> D[Django 5.2]
+  D --> A[Apps de dominio]
+  A --> T[Templates / HTMX<br/>temporal]
+  A --> DB[(PostgreSQL)]
+  A --> M[(Medios: disco o S3)]
+  F[Next.js<br/>pendiente] -.->|API JSON<br/>pendiente| D
 ```
+
+El backend concentra las reglas de negocio, el modelo de datos, la autenticación, el panel administrativo y la lógica de pedidos/pagos. El frontend futuro consumirá esa lógica a través de una API; la estrategia de autenticación y el contrato de la API se definirán antes de implementar Next.js.
 
 ## Despliegue
 
-El proyecto está preparado para Render: `render.yaml` define el servicio y `build.sh` instala dependencias, recolecta estáticos y ejecuta migraciones.
+El servicio se despliega en **Render** usando el blueprint [`render.yaml`](render.yaml):
+
+- `rootDir: backend` — Render ejecuta el build y el start dentro de `backend/`.
+- Build: `./build.sh` (instala dependencias, ejecuta `collectstatic` y `migrate`).
+- Start: Gunicorn con 2 workers y timeout de 120 s.
+- Estáticos: WhiteNoise.
+- Variables sensibles (`SECRET_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`): se configuran manualmente en el panel de Render, nunca en el repositorio.
+
+## Documentación
+
+- [Auditoría inicial del repositorio](docs/audit/INITIAL-AUDIT.md)
+- [Plan del Sprint 1](docs/sprints/SPRINT-1.md)
+- [Diagrama de clases](docs/Diagrama%20de%20clases.drawio.png)
+- [Diagrama entidad-relación](docs/Diagrama%20entidad%20relaci%C3%B3n%20drawio.png)
+
+## Convenciones
+
+- No subir archivos `.env` ni credenciales. Usar `backend/.env.example` como plantilla.
+- Los cambios de infraestructura, modelo de datos o configuración de producción deben revisarse con el equipo.
+- Las pruebas del backend se ejecutan con `pytest`; ver las limitaciones actuales en [`backend/README.md`](backend/README.md).
+- Los hallazgos y decisiones del Sprint 1 se documentan en `docs/`.
+
+## Rama de trabajo
+
+Esta reorganización se desarrolla en la rama:
+
+```text
+refactor/AZ-S1-21-backend-frontend
+```
+
+Issue relacionado: **AZ-S1-21 — Separar frontend y backend**.
 
 ## Autor
 

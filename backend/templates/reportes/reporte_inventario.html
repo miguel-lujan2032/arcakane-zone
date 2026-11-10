@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Reporte de Inventario — Arkane Zone{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <a href="{% url 'reportes:dashboard' %}" class="text-purple-400 hover:underline text-sm">← Dashboard</a>
+    <h1 class="text-3xl font-bold text-purple-400 mt-1">Reporte de Inventario</h1>
+  </div>
+</div>
+
+<!-- Resumen rápido -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <a href="{% url 'reportes:inventario' %}?filtro=todos"
+     class="bg-gray-900 border {% if filtro == 'todos' %}border-purple-600{% else %}border-gray-800{% endif %} rounded-xl p-4 text-center hover:border-purple-600 transition">
+    <p class="text-xs text-gray-400 mb-1">Todos</p>
+    <p class="text-xl font-bold text-gray-200">{{ ofertas|length }}</p>
+  </a>
+  <a href="{% url 'reportes:inventario' %}?filtro=agotados"
+     class="bg-gray-900 border {% if filtro == 'agotados' %}border-red-600{% else %}border-gray-800{% endif %} rounded-xl p-4 text-center hover:border-red-600 transition">
+    <p class="text-xs text-gray-400 mb-1">Agotados</p>
+    <p class="text-xl font-bold text-red-400">{{ total_agotados }}</p>
+  </a>
+  <a href="{% url 'reportes:inventario' %}?filtro=bajo_stock"
+     class="bg-gray-900 border {% if filtro == 'bajo_stock' %}border-yellow-600{% else %}border-gray-800{% endif %} rounded-xl p-4 text-center hover:border-yellow-600 transition">
+    <p class="text-xs text-gray-400 mb-1">Bajo stock (≤{{ umbral }})</p>
+    <p class="text-xl font-bold text-yellow-400">{{ total_bajo_stock }}</p>
+  </a>
+  <a href="{% url 'reportes:inventario' %}?filtro=inactivas"
+     class="bg-gray-900 border {% if filtro == 'inactivas' %}border-gray-500{% else %}border-gray-800{% endif %} rounded-xl p-4 text-center hover:border-gray-500 transition">
+    <p class="text-xs text-gray-400 mb-1">No publicadas</p>
+    <p class="text-xl font-bold text-gray-400">—</p>
+  </a>
+</div>
+
+<!-- Filtros rápidos (botones) -->
+<div class="flex flex-wrap gap-2 mb-4 text-sm">
+  {% for valor, etiqueta in filtros_disponibles|default:"" %}{% endfor %}
+  <a href="?filtro=todos"
+     class="px-3 py-1.5 rounded-lg border {% if filtro == 'todos' %}border-purple-600 bg-purple-900 text-white{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %} transition">
+    Todos
+  </a>
+  <a href="?filtro=disponibles"
+     class="px-3 py-1.5 rounded-lg border {% if filtro == 'disponibles' %}border-green-600 bg-green-900 text-white{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %} transition">
+    Disponibles
+  </a>
+  <a href="?filtro=bajo_stock"
+     class="px-3 py-1.5 rounded-lg border {% if filtro == 'bajo_stock' %}border-yellow-600 bg-yellow-900 text-white{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %} transition">
+    Bajo stock
+  </a>
+  <a href="?filtro=agotados"
+     class="px-3 py-1.5 rounded-lg border {% if filtro == 'agotados' %}border-red-600 bg-red-900 text-white{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %} transition">
+    Agotados
+  </a>
+  <a href="?filtro=inactivas"
+     class="px-3 py-1.5 rounded-lg border {% if filtro == 'inactivas' %}border-gray-500 bg-gray-800 text-white{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %} transition">
+    No publicadas
+  </a>
+</div>
+
+<!-- Tabla -->
+<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-800 text-gray-400">
+      <tr>
+        <th class="px-4 py-3 text-left">Título</th>
+        <th class="px-4 py-3 text-left">Categoría</th>
+        <th class="px-4 py-3 text-left">Plataforma</th>
+        <th class="px-4 py-3 text-center">Stock</th>
+        <th class="px-4 py-3 text-center">Estado</th>
+        <th class="px-4 py-3 text-center">Disponible</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-800">
+      {% for o in ofertas %}
+      <tr class="hover:bg-gray-800 transition
+        {% if o.stock == 0 and o.esta_publicada %}bg-red-950/30
+        {% elif o.stock <= umbral and o.stock > 0 and o.esta_publicada %}bg-yellow-950/30{% endif %}">
+        <td class="px-4 py-3 font-medium text-gray-100">{{ o.videojuego.titulo }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.categoria }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ o.plataforma }}</td>
+        <td class="px-4 py-3 text-center font-mono font-bold
+          {% if o.stock == 0 %}text-red-400
+          {% elif o.stock <= umbral %}text-yellow-400
+          {% else %}text-green-400{% endif %}">
+          {{ o.stock }}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if o.esta_publicada %}
+            <span class="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">Publicada</span>
+          {% elif o.estado_publicacion == 'borrador' %}
+            <span class="text-xs bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded-full">Borrador</span>
+          {% else %}
+            <span class="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">Retirada</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if o.disponible %}
+            <span class="text-green-400 text-base">✓</span>
+          {% else %}
+            <span class="text-red-500 text-base">✗</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" class="px-4 py-10 text-center text-gray-500 italic">
+          No hay productos con el filtro seleccionado.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Leyenda -->
+<div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+  <span><span class="inline-block w-3 h-3 rounded-sm bg-red-950 border border-red-800 mr-1"></span>Agotado (stock 0, activo)</span>
+  <span><span class="inline-block w-3 h-3 rounded-sm bg-yellow-950 border border-yellow-800 mr-1"></span>Bajo stock (1–{{ umbral }})</span>
+</div>
+
+{% endblock %}

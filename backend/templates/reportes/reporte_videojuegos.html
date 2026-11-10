@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Reporte de Videojuegos — Arkane Zone{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{% url 'reportes:dashboard' %}" class="text-purple-400 hover:underline text-sm">← Dashboard</a>
+  <h1 class="text-3xl font-bold text-purple-400 mt-1">Reporte de Videojuegos</h1>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Categoría</label>
+      <select name="categoria">
+        <option value="">Todas</option>
+        {% for cat in categorias %}
+        <option value="{{ cat.pk }}" {% if categoria_id == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Género</label>
+      <select name="genero">
+        <option value="">Todos</option>
+        {% for gen in generos %}
+        <option value="{{ gen.pk }}" {% if genero_id == gen.pk|stringformat:"s" %}selected{% endif %}>{{ gen.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Plataforma</label>
+      <select name="plataforma">
+        <option value="">Todas</option>
+        {% for plat in plataformas %}
+        <option value="{{ plat.pk }}" {% if plataforma_id == plat.pk|stringformat:"s" %}selected{% endif %}>{{ plat.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Estado</label>
+      <select name="estado">
+        <option value="">Todos</option>
+        <option value="activo" {% if estado == 'activo' %}selected{% endif %}>Activo</option>
+        <option value="inactivo" {% if estado == 'inactivo' %}selected{% endif %}>Inactivo</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Disponibilidad</label>
+      <select name="disponibilidad">
+        <option value="">Todas</option>
+        <option value="disponible" {% if disponibilidad == 'disponible' %}selected{% endif %}>Disponible</option>
+        <option value="agotado" {% if disponibilidad == 'agotado' %}selected{% endif %}>Agotado</option>
+      </select>
+    </div>
+
+  </div>
+  <div class="flex gap-3">
+    <button type="submit"
+      class="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition">
+      Filtrar
+    </button>
+    {% if categoria_id or genero_id or plataforma_id or estado or disponibilidad %}
+    <a href="{% url 'reportes:videojuegos' %}"
+       class="text-sm text-gray-400 hover:text-white px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-500 transition">
+      Limpiar filtros
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Resultado -->
+<p class="text-sm text-gray-400 mb-3">{{ ofertas|length }} resultado{{ ofertas|length|pluralize:"s" }}</p>
+
+<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-800 text-gray-400">
+      <tr>
+        <th class="px-4 py-3 text-left">Título</th>
+        <th class="px-4 py-3 text-left">Categoría</th>
+        <th class="px-4 py-3 text-left">Género</th>
+        <th class="px-4 py-3 text-left">Plataforma</th>
+        <th class="px-4 py-3 text-right">Precio</th>
+        <th class="px-4 py-3 text-center">Stock</th>
+        <th class="px-4 py-3 text-center">Estado</th>
+        <th class="px-4 py-3 text-center">Disponible</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-800">
+      {% for o in ofertas %}
+      <tr class="hover:bg-gray-800 transition">
+        <td class="px-4 py-3 font-medium text-gray-100">{{ o.videojuego.titulo }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.categoria }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.genero }}</td>
+        <td class="px-4 py-3 text-gray-400">{{ o.plataforma }}</td>
+        <td class="px-4 py-3 text-right text-purple-300 font-semibold">{{ o.precio_vigente|cop }}</td>
+        <td class="px-4 py-3 text-center font-mono
+          {% if o.stock == 0 %}text-red-400
+          {% elif o.stock <= 5 %}text-yellow-400
+          {% else %}text-green-400{% endif %}">
+          {{ o.stock }}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if o.videojuego.activo %}
+            <span class="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">Activo</span>
+          {% else %}
+            <span class="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">Inactivo</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if o.disponible %}
+            <span class="text-green-400">✓</span>
+          {% else %}
+            <span class="text-red-500">✗</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="8" class="px-4 py-10 text-center text-gray-500 italic">
+          No hay videojuegos con los filtros seleccionados.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

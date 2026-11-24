@@ -37,6 +37,9 @@ else:
     sys.exit("Database did not become ready in time.")
 PY
 
+echo "Preparing cache table..."
+python manage.py createcachetable
+
 if is_true "${RUN_MIGRATIONS:-true}"; then
   echo "Applying database migrations..."
   python manage.py migrate --noinput

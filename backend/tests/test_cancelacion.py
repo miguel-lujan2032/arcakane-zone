@@ -19,7 +19,7 @@ def test_cancelar_pedido_pendiente(pedido_con_item):
 
     assert exito is True
     pedido_con_item.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.CANCELADO
+    assert pedido_con_item.estado_id == "cancelado"
 
 
 @pytest.mark.django_db
@@ -28,13 +28,13 @@ def test_no_cancelar_pedido_pagado(pedido_con_item):
         procesar_pago_simulado(pedido_con_item)
 
     pedido_con_item.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.PAGADO
+    assert pedido_con_item.estado_id == "pagado"
 
     exito, mensaje = cancelar_pedido(pedido_con_item)
     assert exito is False
     assert "pendiente" in mensaje.lower()
     pedido_con_item.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.PAGADO  # no cambió
+    assert pedido_con_item.estado_id == "pagado"  # no cambió
 
 
 @pytest.mark.django_db

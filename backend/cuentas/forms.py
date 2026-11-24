@@ -13,11 +13,21 @@ class RegistroForm(UserCreationForm):
         fields = ["username", "email", "first_name", "last_name", "password1", "password2"]
 
     def save(self, commit=True):
-        usuario = super().save(commit=False)
-        rol_cliente, _ = Rol.objects.get_or_create(nombre="cliente")
-        usuario.rol = rol_cliente
+        usuario = super().save(commit=commit)
+        rol_cliente, _ = Rol.objects.get_or_create(
+            codigo="cliente", defaults={"nombre": "Cliente"}
+        )
         if commit:
-            usuario.save()
+            usuario.roles.add(rol_cliente)
+        else:
+            # Si el usuario aún no se ha guardado, difiere la asignación.
+            original_save_m2m = self.save_m2m
+
+            def save_m2m():
+                original_save_m2m()
+                usuario.roles.add(rol_cliente)
+
+            self.save_m2m = save_m2m
         return usuario
 
 

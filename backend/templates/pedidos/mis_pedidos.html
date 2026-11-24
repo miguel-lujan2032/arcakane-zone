@@ -8,8 +8,8 @@
 <div class="space-y-4">
   {% for pedido in pedidos %}
   <div class="bg-gray-900 rounded-xl border
-    {% if pedido.estado == 'pagado' %}border-green-800
-    {% elif pedido.estado == 'cancelado' %}border-gray-700
+    {% if pedido.estado_id == 'pagado' %}border-green-800
+    {% elif pedido.estado_id == 'cancelado' %}border-gray-700
     {% else %}border-yellow-800{% endif %}
     p-5">
 
@@ -19,10 +19,10 @@
         <p class="text-gray-400 text-xs mt-0.5">{{ pedido.creado_en|date:"d/m/Y H:i" }}</p>
       </div>
       <span class="text-xs font-semibold px-3 py-1 rounded-full
-        {% if pedido.estado == 'pagado' %}bg-green-800 text-green-200
-        {% elif pedido.estado == 'cancelado' %}bg-gray-700 text-gray-400
+        {% if pedido.estado_id == 'pagado' %}bg-green-800 text-green-200
+        {% elif pedido.estado_id == 'cancelado' %}bg-gray-700 text-gray-400
         {% else %}bg-yellow-900 text-yellow-300{% endif %}">
-        {{ pedido.get_estado_display|upper }}
+        {{ pedido.estado.nombre|upper }}
       </span>
     </div>
 
@@ -39,7 +39,7 @@
       <span class="text-purple-400 font-bold text-lg">{{ pedido.total|cop }}</span>
 
       <div class="flex gap-2">
-        {% if pedido.estado == 'pendiente' %}
+        {% if pedido.estado_id == 'pendiente' %}
           <!-- Es el carrito activo -->
           <a href="{% url 'pedidos:carrito' %}"
             class="bg-purple-600 hover:bg-purple-500 text-white text-sm px-4 py-1.5 rounded-lg transition">

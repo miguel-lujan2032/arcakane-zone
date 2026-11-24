@@ -5,7 +5,6 @@ import pytest
 from rest_framework.test import APIClient
 
 from pagos.models import Venta
-from pedidos.models import Pedido
 
 pytestmark = pytest.mark.django_db
 
@@ -28,12 +27,12 @@ def test_usuarios_rechazan_clientes(usuario_cliente):
     assert response.status_code == 403
 
 
-def test_admin_lista_y_filtra_usuarios(usuario_admin, usuario_cliente):
+def test_admin_lista_y_filtra_usuarios(usuario_admin, usuario_cliente, rol_cliente):
     client = _auth(usuario_admin)
 
     listado = client.get("/api/v1/usuarios/")
     busqueda = client.get("/api/v1/usuarios/?q=cliente_test")
-    por_rol = client.get(f"/api/v1/usuarios/?rol={usuario_cliente.rol_id}")
+    por_rol = client.get(f"/api/v1/usuarios/?rol={rol_cliente.pk}")
 
     assert listado.status_code == 200
     assert listado.json()["pagination"]["count"] == 2
@@ -41,13 +40,29 @@ def test_admin_lista_y_filtra_usuarios(usuario_admin, usuario_cliente):
     assert {u["username"] for u in por_rol.json()["data"]} == {"cliente_test"}
 
 
-def test_admin_obtiene_detalle_de_usuario(usuario_admin, usuario_cliente):
+def test_admin_obtiene_detalle_de_usuario(usuario_admin, usuario_cliente, rol_cliente):
     response = _auth(usuario_admin).get(f"/api/v1/usuarios/{usuario_cliente.pk}/")
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["username"] == "cliente_test"
     assert data["rol_nombre"] == "cliente"
+    assert data["roles"] == [rol_cliente.pk]
+
+
+def test_usuario_con_varios_roles_expone_el_primero_por_nombre(
+    usuario_admin, usuario_cliente, rol_cliente, rol_admin
+):
+    usuario_cliente.roles.add(rol_admin)
+
+    data = _auth(usuario_admin).get(
+        f"/api/v1/usuarios/{usuario_cliente.pk}/"
+    ).json()["data"]
+
+    # "administrador" precede a "cliente" al ordenar por nombre.
+    assert data["rol"] == rol_admin.pk
+    assert data["rol_nombre"] == "administrador"
+    assert set(data["roles"]) == {rol_cliente.pk, rol_admin.pk}
 
 
 # ── Roles ───────────────────────────────────────────────────────────────────
@@ -72,11 +87,15 @@ def test_ventas_solo_para_administradores(usuario_cliente, usuario_admin):
 
 
 def test_admin_lista_ventas_con_filtro_de_cliente(
-    usuario_admin, usuario_cliente, pedido_con_item
+    usuario_admin, usuario_cliente, pedido_con_item, intento_aprobado
 ):
-    pedido_con_item.estado = Pedido.Estado.PAGADO
+    pedido_con_item.estado_id = "pagado"
     pedido_con_item.save(update_fields=["estado"])
-    venta = Venta.objects.create(pedido=pedido_con_item, total=Decimal("160000"))
+    venta = Venta.objects.create(
+        pedido=pedido_con_item,
+        intento_aprobado=intento_aprobado,
+        total=Decimal("160000"),
+    )
 
     client = _auth(usuario_admin)
     listado = client.get("/api/v1/ventas/")

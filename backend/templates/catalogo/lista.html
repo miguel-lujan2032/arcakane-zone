@@ -47,7 +47,7 @@
     {% endif %}
     <div class="p-4 flex flex-col flex-1">
       <h2 class="font-semibold text-white text-sm mb-1">{{ o.videojuego.titulo }}</h2>
-      <p class="text-xs text-gray-400 mb-1">{{ o.plataforma }} · {{ o.videojuego.genero }}</p>
+      <p class="text-xs text-gray-400 mb-1">{{ o.plataforma }} · {% for g in o.videojuego.generos.all %}{{ g.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
       <p class="text-purple-400 font-bold text-lg mt-auto">{{ o.precio_vigente|cop }}</p>
       {% if o.disponible %}
         <p class="text-xs text-green-400 mb-2">Stock: {{ o.stock }}</p>

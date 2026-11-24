@@ -7,7 +7,7 @@ from .models import DetallePedido, Pedido
 
 def get_or_create_carrito(usuario) -> Pedido:
     pedido, _ = Pedido.objects.get_or_create(
-        cliente=usuario, estado=Pedido.Estado.PENDIENTE
+        cliente=usuario, estado_id="pendiente"
     )
     return pedido
 
@@ -56,18 +56,27 @@ def agregar_o_incrementar(usuario, oferta_id: int, cantidad: int = 1) -> tuple[b
         return False, f'"{oferta.videojuego.titulo}" no tiene stock disponible.'
 
     pedido = get_or_create_carrito(usuario)
-    detalle, creado = DetallePedido.objects.get_or_create(
-        pedido=pedido,
-        oferta=oferta,
-        defaults={"precio_unitario": oferta.precio_vigente, "cantidad": 0},
+    detalle = (
+        DetallePedido.objects.select_for_update()
+        .filter(pedido=pedido, oferta=oferta)
+        .first()
     )
-
-    nueva_cantidad = detalle.cantidad + cantidad
+    cantidad_actual = detalle.cantidad if detalle is not None else 0
+    nueva_cantidad = cantidad_actual + cantidad
     if nueva_cantidad > oferta.stock:
         return False, f'Stock insuficiente. Máximo disponible: {oferta.stock}.'
 
-    detalle.cantidad = nueva_cantidad
-    detalle.save(update_fields=["cantidad"])
+    if detalle is None:
+        # La línea nueva nace con la cantidad solicitada: nunca con 0.
+        DetallePedido.objects.create(
+            pedido=pedido,
+            oferta=oferta,
+            precio_unitario=oferta.precio_vigente,
+            cantidad=cantidad,
+        )
+    else:
+        detalle.cantidad = nueva_cantidad
+        detalle.save(update_fields=["cantidad"])
     return True, (
         f'"{oferta.videojuego.titulo}" ({oferta.plataforma.nombre}) '
         "agregado al carrito."
@@ -84,7 +93,7 @@ def actualizar_cantidad(usuario, detalle_id: int, cantidad: int) -> tuple[bool, 
             .get(
                 pk=detalle_id,
                 pedido__cliente=usuario,
-                pedido__estado=Pedido.Estado.PENDIENTE,
+                pedido__estado_id="pendiente",
             )
         )
     except DetallePedido.DoesNotExist:
@@ -107,7 +116,7 @@ def actualizar_cantidad(usuario, detalle_id: int, cantidad: int) -> tuple[bool, 
 def quitar_item(usuario, detalle_id: int) -> tuple[bool, str]:
     try:
         detalle = DetallePedido.objects.get(
-            pk=detalle_id, pedido__cliente=usuario, pedido__estado=Pedido.Estado.PENDIENTE
+            pk=detalle_id, pedido__cliente=usuario, pedido__estado_id="pendiente"
         )
         detalle.delete()
         return True, "Ítem eliminado."
@@ -118,8 +127,8 @@ def quitar_item(usuario, detalle_id: int) -> tuple[bool, str]:
 @transaction.atomic
 def cancelar_pedido(pedido: Pedido) -> tuple[bool, str]:
     """Cancela un pedido pendiente. Solo opera sobre el propio pedido del usuario."""
-    if pedido.estado != Pedido.Estado.PENDIENTE:
+    if pedido.estado_id != "pendiente":
         return False, "Solo se pueden cancelar pedidos en estado pendiente."
-    pedido.estado = Pedido.Estado.CANCELADO
+    pedido.estado_id = "cancelado"
     pedido.save(update_fields=["estado"])
     return True, f"Pedido #{pedido.pk} cancelado correctamente."

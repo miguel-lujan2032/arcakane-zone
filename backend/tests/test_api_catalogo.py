@@ -2,9 +2,19 @@
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
-from catalogo.models import Categoria, Genero, OfertaVideojuego, Plataforma, Videojuego
+from catalogo.models import (
+    Categoria,
+    Genero,
+    OfertaVideojuego,
+    Plataforma,
+    Videojuego,
+    VideojuegoCategoria,
+    VideojuegoGenero,
+)
 
 
 pytestmark = pytest.mark.django_db
@@ -45,11 +55,9 @@ def test_catalogo_es_publico_y_paginado(categoria, genero, videojuego, oferta):
 def test_filtros_y_busqueda_del_catalogo(categoria, genero, videojuego, oferta):
     otra_categoria = Categoria.objects.create(nombre="Deportes")
     otro_genero = Genero.objects.create(nombre="Shooter")
-    otro = Videojuego.objects.create(
-        titulo="Juego Beta",
-        categoria=otra_categoria,
-        genero=otro_genero,
-    )
+    otro = Videojuego.objects.create(titulo="Juego Beta")
+    VideojuegoCategoria.objects.create(videojuego=otro, categoria=otra_categoria)
+    VideojuegoGenero.objects.create(videojuego=otro, genero=otro_genero)
     OfertaVideojuego.objects.create(
         videojuego=otro,
         plataforma=oferta.plataforma,
@@ -85,18 +93,16 @@ def test_detalle_de_videojuego_y_ofertas_anidadas(videojuego, oferta):
 
 
 def test_ofertas_publicas_ocultan_borradores(videojuego, plataforma, categoria, genero):
-    otro_videojuego = Videojuego.objects.create(
-        titulo="Juego Oculto",
-        categoria=categoria,
-        genero=genero,
-    )
+    otro_videojuego = Videojuego.objects.create(titulo="Juego Oculto")
+    VideojuegoCategoria.objects.create(videojuego=otro_videojuego, categoria=categoria)
+    VideojuegoGenero.objects.create(videojuego=otro_videojuego, genero=genero)
     OfertaVideojuego.objects.create(
         videojuego=videojuego,
         plataforma=plataforma,
         precio_vigente=Decimal("1000"),
         sku="AZ-PUB-001",
         stock=2,
-        estado_publicacion=OfertaVideojuego.EstadoPublicacion.PUBLICADO,
+        estado_publicacion_id="publicado",
     )
     OfertaVideojuego.objects.create(
         videojuego=otro_videojuego,
@@ -104,7 +110,7 @@ def test_ofertas_publicas_ocultan_borradores(videojuego, plataforma, categoria, 
         precio_vigente=Decimal("2000"),
         sku="AZ-BOR-001",
         stock=2,
-        estado_publicacion=OfertaVideojuego.EstadoPublicacion.BORRADOR,
+        estado_publicacion_id="borrador",
     )
 
     response = _client().get("/api/v1/catalogo/ofertas/")
@@ -244,3 +250,113 @@ def test_ruta_desconocida_responde_json_404():
     assert response.status_code == 404
     assert response.json()["success"] is False
     assert response.json()["error"]["code"] == "no_encontrado"
+
+
+# ── Contrato aditivo del modelo normalizado ──────────────────────────────────
+
+def test_contrato_videojuego_campos_nuevos_y_obsoletos(videojuego, categoria, genero):
+    otra_categoria = Categoria.objects.create(nombre="Zona")
+    otro_genero = Genero.objects.create(nombre="Zelda")
+    VideojuegoCategoria.objects.create(videojuego=videojuego, categoria=otra_categoria)
+    VideojuegoGenero.objects.create(videojuego=videojuego, genero=otro_genero)
+
+    data = _client().get(f"/api/v1/catalogo/videojuegos/{videojuego.pk}/").json()["data"]
+
+    # Los campos históricos siguen teniendo un único valor determinista.
+    assert data["categoria"] == categoria.pk
+    assert data["categoria_nombre"] == "Acción"
+    assert data["genero"] == genero.pk
+    assert data["genero_nombre"] == "RPG"
+    assert set(data["categorias"]) == {categoria.pk, otra_categoria.pk}
+    assert set(data["generos"]) == {genero.pk, otro_genero.pk}
+
+
+def test_admin_puede_crear_videojuego_con_listas_m2m(
+    usuario_admin, categoria, genero
+):
+    otra_categoria = Categoria.objects.create(nombre="Zona")
+    otro_genero = Genero.objects.create(nombre="Zelda")
+    client = _client()
+    client.force_authenticate(usuario_admin)
+
+    response = client.post(
+        "/api/v1/catalogo/videojuegos/",
+        {
+            "titulo": "Juego con listas",
+            "categorias": [categoria.pk, otra_categoria.pk],
+            "generos": [genero.pk, otro_genero.pk],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    creado = Videojuego.objects.get(pk=response.json()["data"]["id"])
+    assert creado.categorias.count() == 2
+    assert creado.generos.count() == 2
+
+
+def test_filtros_m2m_combinados_no_duplican_y_respetan_paginacion(
+    videojuego, oferta, oferta_agotada, categoria, genero
+):
+    otra_categoria = Categoria.objects.create(nombre="Zona")
+    otro_genero = Genero.objects.create(nombre="Zelda")
+    VideojuegoCategoria.objects.create(videojuego=videojuego, categoria=otra_categoria)
+    VideojuegoGenero.objects.create(videojuego=videojuego, genero=otro_genero)
+
+    otro = Videojuego.objects.create(titulo="Juego Beta")
+    VideojuegoCategoria.objects.create(videojuego=otro, categoria=otra_categoria)
+    VideojuegoGenero.objects.create(videojuego=otro, genero=otro_genero)
+    OfertaVideojuego.objects.create(
+        videojuego=otro,
+        plataforma=oferta.plataforma,
+        precio_vigente=Decimal("50000"),
+        sku="AZ-0002-002",
+        stock=1,
+        estado_publicacion_id="publicado",
+    )
+    client = _client()
+
+    combinado = client.get(
+        "/api/v1/catalogo/videojuegos/",
+        {
+            "categoria": categoria.pk,
+            "genero": genero.pk,
+            "plataforma": oferta.plataforma_id,
+            "disponible": "true",
+            "page_size": 1,
+        },
+    ).json()
+    assert combinado["pagination"]["count"] == 1
+    assert [v["titulo"] for v in combinado["data"]] == ["Juego Alpha"]
+
+    por_listas = client.get(
+        "/api/v1/catalogo/videojuegos/",
+        {"categoria": otra_categoria.pk, "genero": otro_genero.pk},
+    ).json()
+    titulos = [v["titulo"] for v in por_listas["data"]]
+    assert por_listas["pagination"]["count"] == 2
+    assert len(titulos) == len(set(titulos)) == 2
+
+
+def test_listado_videojuegos_limita_consultas_con_varios_vinculos(
+    videojuego, oferta, categoria, genero
+):
+    for indice in range(5):
+        juego = Videojuego.objects.create(titulo=f"Juego extra {indice}")
+        VideojuegoCategoria.objects.create(videojuego=juego, categoria=categoria)
+        VideojuegoGenero.objects.create(videojuego=juego, genero=genero)
+        OfertaVideojuego.objects.create(
+            videojuego=juego,
+            plataforma=oferta.plataforma,
+            precio_vigente=Decimal("10000"),
+            sku=f"AZ-EXTRA-{indice:03d}",
+            stock=1,
+            estado_publicacion_id="publicado",
+        )
+
+    with CaptureQueriesContext(connection) as consultas:
+        response = _client().get("/api/v1/catalogo/videojuegos/?page_size=20")
+
+    assert response.status_code == 200
+    assert response.json()["pagination"]["count"] == 6
+    assert len(consultas.captured_queries) <= 8

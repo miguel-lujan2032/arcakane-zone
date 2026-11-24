@@ -20,7 +20,7 @@ Archivos relevantes de esta carpeta:
 
 - `Dockerfile`: imagen de producción basada en `python:3.12.9-slim`, usuario no privilegiado y Gunicorn por defecto.
 - `.dockerignore`: excluye `.env`, `.venv`, pruebas, medios y estáticos locales del contexto de build.
-- `docker/entrypoint.sh`: espera a PostgreSQL, aplica migraciones, recolecta estáticos y opcionalmente ejecuta `seed_catalogo`.
+- `docker/entrypoint.sh`: espera a PostgreSQL, crea la tabla de caché si hace falta, aplica migraciones, recolecta estáticos y opcionalmente ejecuta `seed_catalogo`.
 
 Comandos habituales dentro del contenedor:
 
@@ -30,6 +30,17 @@ docker compose exec backend python manage.py createsuperuser
 docker compose exec backend python manage.py seed_catalogo
 docker compose exec backend python manage.py shell
 ```
+
+### Throttling y caché
+
+Los límites de la API (`anon`, `user`, `login`, `registro`, `contacto`,
+`password_reset`) se
+guardan en caché. Por defecto se usa la tabla `django_cache` de PostgreSQL;
+el entrypoint la crea con `python manage.py createcachetable` de forma
+idempotente. Para usar Redis, define `REDIS_URL` (requiere el paquete `redis`).
+Las tasas y el bloqueo de login se configuran con las variables
+`THROTTLE_RATE_*`, `THROTTLE_NUM_PROXIES` y `LOGIN_*` documentadas en
+[`.env.example`](.env.example) y en [`docs/api/API.md`](../docs/api/API.md).
 
 ## Estructura
 
@@ -94,6 +105,13 @@ cp .env.example .env
 | `ALLOWED_HOSTS` | No | Lista separada por comas. Por defecto `localhost,127.0.0.1,backend`. |
 | `CSRF_TRUSTED_ORIGINS` | No | Orígenes permitidos para CSRF. En Render se agrega automáticamente el host público. |
 | `CORS_ALLOWED_ORIGINS` | No | Orígenes permitidos para CORS (lista separada por comas). Solo hace falta si el frontend llama a la API sin el proxy `/api`. |
+| `EMAIL_BACKEND` | No | Por defecto, consola en desarrollo; se usa SMTP automáticamente si se define `EMAIL_HOST`. |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | No | Servidor SMTP. `EMAIL_PORT` por defecto `25`. |
+| `EMAIL_USE_TLS`, `EMAIL_USE_SSL`, `EMAIL_TIMEOUT` | No | Opciones SMTP; TLS/SSL en `False` y tiempo de espera `10` s por defecto. |
+| `DEFAULT_FROM_EMAIL` | No | Remitente de los correos de restablecimiento. |
+| `PASSWORD_RESET_TIMEOUT` | No | Segundos de validez del enlace; `3600` por defecto. |
+| `FRONTEND_BASE_URL`, `PASSWORD_RESET_FRONTEND_PATH` | No | Base y patrón del enlace del correo; defecto `http://localhost:5173` + `/restablecer-contrasena/{uid}/{token}`. |
+| `PASSWORD_RESET_MAX_EMAILS_PER_HOUR` | No | Máximo de correos por hora y correo normalizado; `3` por defecto. |
 | `SECURE_SSL_REDIRECT` | No | Fuerza HTTPS cuando `DEBUG=False`; por defecto `True`. En Docker se pone `False` porque TLS termina en el proxy. |
 | `USE_X_FORWARDED_HOST` | No | Usa `X-Forwarded-Host` detrás de un proxy; por defecto `False`. |
 | `RENDER_EXTERNAL_HOSTNAME` | No | La define Render; se agrega a `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS`. |
@@ -215,7 +233,7 @@ El blueprint está en la raíz del repositorio: [`../render.yaml`](../render.yam
 ### Consideraciones de producción
 
 - **Medios:** si no se configuran las variables `AWS_*`, las portadas y fotos se guardan en el sistema de archivos local de Render, que es efímero. Además, `/media/` solo se sirve con `DEBUG=True`. Para producción se debe configurar S3/Supabase Storage o aceptar explícitamente la limitación.
-- **Correo:** `EMAIL_BACKEND` está fijado al backend de consola. El reseteo de contraseña no envía correos reales y los enlaces quedan en los logs. Configurar SMTP antes de habilitar recuperación de contraseña en producción.
+- **Correo:** sin `EMAIL_HOST` se usa el backend de consola, así que en desarrollo los enlaces se imprimen en la terminal (se puede probar con `pytest`, que usa `locmem`). En producción configura `EMAIL_*` y `DEFAULT_FROM_EMAIL`; de lo contrario la recuperación por API no enviará correos reales.
 - **Proxy HTTPS:** `SECURE_PROXY_SSL_HEADER` está configurado para confiar en `X-Forwarded-Proto`. En Docker, `SECURE_SSL_REDIRECT` se desactiva dentro del contenedor porque TLS termina en el proxy inverso; el healthcheck interno usa HTTP.
 - **Migraciones:** actualmente se ejecutan durante el build. Evaluar un `preDeployCommand` antes de un despliegue con más de una instancia.
 - **Validación:** ejecutar `python manage.py check --deploy` antes de cada despliegue.

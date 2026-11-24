@@ -95,8 +95,8 @@
       {% for o in ofertas %}
       <tr class="hover:bg-gray-800 transition">
         <td class="px-4 py-3 font-medium text-gray-100">{{ o.videojuego.titulo }}</td>
-        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.categoria }}</td>
-        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.genero }}</td>
+        <td class="px-4 py-3 text-gray-400">{% for c in o.videojuego.categorias.all %}{{ c.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td class="px-4 py-3 text-gray-400">{% for g in o.videojuego.generos.all %}{{ g.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
         <td class="px-4 py-3 text-gray-400">{{ o.plataforma }}</td>
         <td class="px-4 py-3 text-right text-purple-300 font-semibold">{{ o.precio_vigente|cop }}</td>
         <td class="px-4 py-3 text-center font-mono

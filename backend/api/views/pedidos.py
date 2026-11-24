@@ -1,15 +1,16 @@
 """Pedidos del cliente y transiciones de estado."""
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 
+from pagos.models import IntentoPago
 from pedidos.models import Pedido
 from pedidos.services import cancelar_pedido
 
 from ..exceptions import ErrorDeNegocio, respuesta_exitosa
-from ..serializers import PedidoEstadoSerializer, PedidoSerializer
+from ..serializers import PedidoEstadoSerializer, PedidoSerializer, codigos_estado_pedido
 from ..utils import es_administrador
 
 
@@ -20,10 +21,19 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = (
-            Pedido.objects.select_related("cliente", "pago", "venta")
+            Pedido.objects.select_related("cliente", "venta")
             .prefetch_related(
+                "intentos_pago",
+                Prefetch(
+                    "intentos_pago",
+                    queryset=IntentoPago.objects.filter(estado_id="aprobado").order_by(
+                        "-creado_en", "-pk"
+                    ),
+                    to_attr="_intentos_aprobados",
+                ),
                 "detalles__oferta__videojuego",
                 "detalles__oferta__plataforma",
+                "detalles__oferta__estado_publicacion",
             )
         )
         if not es_administrador(self.request.user):
@@ -42,15 +52,16 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
 
         estado = self.request.query_params.get("estado")
         if estado:
-            if estado not in Pedido.Estado.values:
+            codigos = codigos_estado_pedido()
+            if estado not in codigos:
                 raise ValidationError(
                     {
                         "estado": (
-                            "Valor inválido. Opciones: " + ", ".join(Pedido.Estado.values)
+                            "Valor inválido. Opciones: " + ", ".join(codigos)
                         )
                     }
                 )
-            queryset = queryset.filter(estado=estado)
+            queryset = queryset.filter(estado_id=estado)
         return queryset
 
     def partial_update(self, request, *args, **kwargs):

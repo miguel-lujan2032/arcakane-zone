@@ -7,7 +7,14 @@
   <h1 class="text-3xl font-bold text-purple-400 mb-1">Mi Perfil</h1>
   <p class="text-gray-400 text-sm mb-6">
     Usuario: <span class="text-gray-200 font-mono">{{ user.username }}</span>
-    {% if user.rol %} · Rol: <span class="text-purple-300">{{ user.rol }}</span>{% endif %}
+    {% with roles=user.roles.all %}
+      {% if roles %}
+        · Roles:
+        {% for rol in roles %}
+          <span class="text-purple-300">{{ rol.nombre }}</span>{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
   </p>
 
   <form method="post" class="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5 mb-6">

@@ -5,7 +5,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from cuentas.models import Usuario
-from pagos.models import Pago, Venta
+from pagos.models import IntentoPago, Venta
 from pedidos.models import DetallePedido, Pedido
 
 
@@ -81,7 +81,7 @@ def test_agregar_misma_oferta_incrementa_cantidad(usuario_cliente, oferta):
     )
 
     assert response.status_code == 201
-    pedido = Pedido.objects.get(cliente=usuario_cliente, estado=Pedido.Estado.PENDIENTE)
+    pedido = Pedido.objects.get(cliente=usuario_cliente, estado="pendiente")
     assert pedido.detalles.count() == 1
     assert pedido.detalles.first().cantidad == 3
 
@@ -98,7 +98,7 @@ def test_agregar_sin_stock_devuelve_409(usuario_cliente, oferta_agotada):
 
 
 def test_agregar_oferta_no_publicada_devuelve_409(usuario_cliente, oferta):
-    oferta.estado_publicacion = "retirado"
+    oferta.estado_publicacion_id = "retirado"
     oferta.save(update_fields=["estado_publicacion"])
 
     response = _auth(usuario_cliente).post(
@@ -204,7 +204,7 @@ def test_listado_de_pedidos_solo_incluye_los_del_cliente(
     usuario_cliente, usuario_admin, pedido_con_item
 ):
     otro_pedido = Pedido.objects.create(
-        cliente=usuario_admin, estado=Pedido.Estado.PAGADO
+        cliente=usuario_admin, estado_id="pagado"
     )
     DetallePedido.objects.create(
         pedido=otro_pedido,
@@ -247,7 +247,7 @@ def test_cancelar_pedido_pendiente_con_patch(usuario_cliente, pedido_con_item):
     assert response.status_code == 200
     assert response.json()["data"]["estado"] == "cancelado"
     pedido_con_item.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.CANCELADO
+    assert pedido_con_item.estado_id == "cancelado"
 
 
 def test_cancelar_pedido_pendiente_con_accion(usuario_cliente, pedido_con_item):
@@ -260,7 +260,7 @@ def test_cancelar_pedido_pendiente_con_accion(usuario_cliente, pedido_con_item):
 
 
 def test_no_cancelar_pedido_pagado(usuario_cliente, pedido_con_item):
-    pedido_con_item.estado = Pedido.Estado.PAGADO
+    pedido_con_item.estado_id = "pagado"
     pedido_con_item.save(update_fields=["estado"])
 
     response = _auth(usuario_cliente).patch(
@@ -311,7 +311,7 @@ def test_pago_aprobado(usuario_cliente, pedido_con_item, oferta):
 
     pedido_con_item.refresh_from_db()
     oferta.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.PAGADO
+    assert pedido_con_item.estado_id == "pagado"
     assert oferta.stock == stock_inicial - cantidad
     assert Venta.objects.filter(pedido=pedido_con_item).exists()
 
@@ -332,7 +332,7 @@ def test_pago_rechazado_devuelve_402_y_no_cambia_stock(
     assert response.json()["error"]["code"] == "pago_rechazado"
     pedido_con_item.refresh_from_db()
     oferta.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.PENDIENTE
+    assert pedido_con_item.estado_id == "pendiente"
     assert oferta.stock == stock_inicial
 
 
@@ -354,9 +354,11 @@ def test_reintento_despues_de_rechazo(usuario_cliente, pedido_con_item):
 
     assert rechazado.status_code == 402
     assert aprobado.status_code == 201
-    assert Pago.objects.filter(pedido=pedido_con_item).count() == 1
+    # La normalización conserva los dos intentos; el rechazo no bloqueó el reintento.
+    assert IntentoPago.objects.filter(pedido=pedido_con_item).count() == 2
     pedido_con_item.refresh_from_db()
-    assert pedido_con_item.estado == Pedido.Estado.PAGADO
+    assert pedido_con_item.estado_id == "pagado"
+    assert pedido_con_item.pago.estado_id == "aprobado"
 
 
 def test_no_pagar_pedido_de_otro_usuario(usuario_cliente, pedido_con_item):
@@ -370,7 +372,7 @@ def test_no_pagar_pedido_de_otro_usuario(usuario_cliente, pedido_con_item):
 
 
 def test_no_pagar_pedido_ya_pagado(usuario_cliente, pedido_con_item, oferta):
-    pedido_con_item.estado = Pedido.Estado.PAGADO
+    pedido_con_item.estado_id = "pagado"
     pedido_con_item.save(update_fields=["estado"])
 
     response = _auth(usuario_cliente).post(
@@ -396,19 +398,19 @@ def test_pago_con_pedido_inexistente_devuelve_400(usuario_cliente):
 def test_listado_de_pagos_solo_muestra_los_propios(
     usuario_cliente, usuario_admin, pedido_con_item
 ):
-    Pago.objects.create(
+    IntentoPago.objects.create(
         pedido=pedido_con_item,
-        monto=pedido_con_item.total,
-        estado=Pago.Estado.APROBADO,
+        importe=pedido_con_item.total,
+        estado_id="aprobado",
         referencia="ABC123",
     )
     otro = Pedido.objects.create(
-        cliente=usuario_admin, estado=Pedido.Estado.PAGADO
+        cliente=usuario_admin, estado_id="pagado"
     )
-    Pago.objects.create(
+    IntentoPago.objects.create(
         pedido=otro,
-        monto="1000.00",
-        estado=Pago.Estado.APROBADO,
+        importe="1000.00",
+        estado_id="aprobado",
         referencia="XYZ789",
     )
 
@@ -417,3 +419,32 @@ def test_listado_de_pagos_solo_muestra_los_propios(
     assert response.status_code == 200
     assert response.json()["pagination"]["count"] == 1
     assert response.json()["data"][0]["referencia"] == "ABC123"
+    assert response.json()["data"][0]["monto"] == "160000.00"
+
+
+def test_pedido_con_varios_intentos_expone_el_aprobado(usuario_cliente, pedido_con_item):
+    rechazado = IntentoPago.objects.create(
+        pedido=pedido_con_item,
+        importe=pedido_con_item.total,
+        estado_id="rechazado",
+        referencia="REF-RECHAZO",
+    )
+    aprobado = IntentoPago.objects.create(
+        pedido=pedido_con_item,
+        importe=pedido_con_item.total,
+        estado_id="aprobado",
+        referencia="REF-APROBADO",
+    )
+
+    data = _auth(usuario_cliente).get(
+        f"/api/v1/pedidos/{pedido_con_item.pk}/"
+    ).json()["data"]
+
+    assert data["estado"] == "pendiente"
+    assert data["pago"]["estado"] == "aprobado"
+    assert data["pago"]["referencia"] == aprobado.referencia
+    assert data["pago"]["monto"] == "160000.00"
+    assert {intento["referencia"] for intento in data["intentos_pago"]} == {
+        rechazado.referencia,
+        aprobado.referencia,
+    }

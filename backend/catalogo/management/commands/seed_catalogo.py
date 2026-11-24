@@ -2,33 +2,92 @@ from datetime import date
 
 from django.core.management.base import BaseCommand
 
-from catalogo.models import Categoria, Genero, OfertaVideojuego, Plataforma, Videojuego
+from catalogo.models import (
+    Categoria,
+    ClasificacionEdad,
+    EstadoPublicacion,
+    Genero,
+    Idioma,
+    OfertaVideojuego,
+    Plataforma,
+    Videojuego,
+    VideojuegoCategoria,
+    VideojuegoGenero,
+    normalizar_nombre_catalogo,
+)
 from cuentas.models import Rol
+from pagos.models import EstadoIntentoPago
+from pedidos.models import EstadoPedido
 
 
 class Command(BaseCommand):
     help = "Pobla la base de datos con datos de prueba para Arcakane Zone."
 
     def handle(self, *args, **kwargs):
+        estados_creados = self._seed_estados()
         roles_creados = self._seed_roles()
         cats_creadas = self._seed_categorias()
         plats_creadas = self._seed_plataformas()
         gens_creados = self._seed_generos()
+        clas_creadas = self._seed_clasificaciones_edad()
+        idiomas_creados = self._seed_idiomas()
         juegos_creados, ofertas_creadas = self._seed_catalogo_comercial()
 
         self.stdout.write(self.style.SUCCESS("\n=== Seed completado ==="))
-        self.stdout.write(f"  Roles:        {roles_creados} creados")
-        self.stdout.write(f"  Categorías:   {cats_creadas} creadas")
-        self.stdout.write(f"  Plataformas:  {plats_creadas} creadas")
-        self.stdout.write(f"  Géneros:      {gens_creados} creados")
-        self.stdout.write(f"  Videojuegos:  {juegos_creados} creados")
-        self.stdout.write(f"  Ofertas:      {ofertas_creadas} creadas")
+        self.stdout.write(f"  Estados:        {estados_creados} creados")
+        self.stdout.write(f"  Roles:          {roles_creados} creados")
+        self.stdout.write(f"  Categorías:     {cats_creadas} creadas")
+        self.stdout.write(f"  Plataformas:    {plats_creadas} creadas")
+        self.stdout.write(f"  Géneros:        {gens_creados} creados")
+        self.stdout.write(f"  Clasificaciones: {clas_creadas} creadas")
+        self.stdout.write(f"  Idiomas:        {idiomas_creados} creados")
+        self.stdout.write(f"  Videojuegos:    {juegos_creados} creados")
+        self.stdout.write(f"  Ofertas:        {ofertas_creadas} creadas")
+
+    # ------------------------------------------------------------------
+    def _seed_estados(self):
+        """Siembra idempotente de los catálogos de estado (AZ-S1-17)."""
+        creados = 0
+        for codigo, nombre in [
+            ("pendiente", "Pendiente"),
+            ("pagado", "Pagado"),
+            ("cancelado", "Cancelado"),
+        ]:
+            _, nuevo = EstadoPedido.objects.get_or_create(
+                codigo=codigo, defaults={"nombre": nombre}
+            )
+            if nuevo:
+                creados += 1
+        for codigo, nombre in [
+            ("aprobado", "Aprobado"),
+            ("rechazado", "Rechazado"),
+            ("pendiente", "Pendiente"),
+        ]:
+            _, nuevo = EstadoIntentoPago.objects.get_or_create(
+                codigo=codigo, defaults={"nombre": nombre}
+            )
+            if nuevo:
+                creados += 1
+        for codigo, nombre in [
+            ("borrador", "Borrador"),
+            ("publicado", "Publicado"),
+            ("retirado", "Retirado"),
+        ]:
+            _, nuevo = EstadoPublicacion.objects.get_or_create(
+                codigo=codigo, defaults={"nombre": nombre}
+            )
+            if nuevo:
+                creados += 1
+        return creados
 
     # ------------------------------------------------------------------
     def _seed_roles(self):
+        """Siembra idempotente de roles base alineada al código estable (AZ-S1-18)."""
         creados = 0
-        for nombre in ["cliente", "administrador"]:
-            _, nuevo = Rol.objects.get_or_create(nombre=nombre)
+        for codigo, nombre in [("cliente", "Cliente"), ("administrador", "Administrador")]:
+            _, nuevo = Rol.objects.get_or_create(
+                codigo=codigo, defaults={"nombre": nombre}
+            )
             if nuevo:
                 creados += 1
         return creados
@@ -75,6 +134,52 @@ class Command(BaseCommand):
         creados = 0
         for nombre, desc in datos:
             _, nuevo = Genero.objects.get_or_create(nombre=nombre, defaults={"descripcion": desc})
+            if nuevo:
+                creados += 1
+        return creados
+
+    def _seed_clasificaciones_edad(self):
+        """Siembra idempotente del sistema PEGI (AZ-S1-20)."""
+        datos = [
+            ("3", "PEGI 3", 3),
+            ("7", "PEGI 7", 7),
+            ("12", "PEGI 12", 12),
+            ("16", "PEGI 16", 16),
+            ("18", "PEGI 18", 18),
+        ]
+        creados = 0
+        for codigo, nombre, orden in datos:
+            _, nuevo = ClasificacionEdad.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    "nombre": normalizar_nombre_catalogo(nombre),
+                    "orden": orden,
+                },
+            )
+            if nuevo:
+                creados += 1
+        return creados
+
+    def _seed_idiomas(self):
+        """Siembra idempotente de idiomas comunes con código ISO 639-1 (AZ-S1-20)."""
+        datos = [
+            ("es", "Español"),
+            ("en", "Inglés"),
+            ("fr", "Francés"),
+            ("de", "Alemán"),
+            ("it", "Italiano"),
+            ("pt", "Portugués"),
+            ("ja", "Japonés"),
+            ("ko", "Coreano"),
+            ("zh", "Chino"),
+            ("ru", "Ruso"),
+        ]
+        creados = 0
+        for codigo, nombre in datos:
+            _, nuevo = Idioma.objects.get_or_create(
+                codigo=codigo,
+                defaults={"nombre": normalizar_nombre_catalogo(nombre)},
+            )
             if nuevo:
                 creados += 1
         return creados
@@ -260,12 +365,20 @@ class Command(BaseCommand):
                 defaults={
                     "descripcion": datos["descripcion"],
                     "fecha_lanzamiento": datos["fecha_lanzamiento"],
-                    "categoria": datos["categoria"],
-                    "genero": datos["genero"],
                 },
             )
             if nuevo:
                 juegos_creados += 1
+
+            # Asociación inicial en las tablas puente. Se mantiene una sola
+            # categoría y un solo género por juego para no alterar los datos
+            # esperados por el resto del sistema.
+            VideojuegoCategoria.objects.get_or_create(
+                videojuego=videojuego, categoria=datos["categoria"]
+            )
+            VideojuegoGenero.objects.get_or_create(
+                videojuego=videojuego, genero=datos["genero"]
+            )
 
             for oferta in datos["ofertas"]:
                 plataforma = plt[oferta["plataforma"]]

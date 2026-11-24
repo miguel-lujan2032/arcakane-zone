@@ -128,7 +128,7 @@ def test_detalle_unico_por_pedido_y_oferta(pedido_con_item, oferta):
 def test_detalle_congela_precio_titulo_y_plataforma(usuario_cliente, oferta):
     """Los detalles históricos no cambian aunque el catálogo se modifique."""
     pedido = Pedido.objects.create(
-        cliente=usuario_cliente, estado=Pedido.Estado.PAGADO
+        cliente=usuario_cliente, estado_id="pagado"
     )
     detalle = DetallePedido.objects.create(
         pedido=pedido, oferta=oferta, cantidad=1,
@@ -162,17 +162,17 @@ def test_manager_publicadas_filtra_por_estado(videojuego, plataforma, plataforma
     publicada = OfertaVideojuego.objects.create(
         videojuego=videojuego, plataforma=plataforma,
         precio_vigente=Decimal("10.00"), sku="AZ-PUB-01", stock=9,
-        estado_publicacion=OfertaVideojuego.EstadoPublicacion.PUBLICADO,
+        estado_publicacion_id="publicado",
     )
     OfertaVideojuego.objects.create(
         videojuego=videojuego, plataforma=plataforma_alternativa,
         precio_vigente=Decimal("1.00"), sku="AZ-BORR-01", stock=9,
-        estado_publicacion=OfertaVideojuego.EstadoPublicacion.BORRADOR,
+        estado_publicacion_id="borrador",
     )
     OfertaVideojuego.objects.create(
         videojuego=videojuego, plataforma=switch,
         precio_vigente=Decimal("1.00"), sku="AZ-RETI-01", stock=9,
-        estado_publicacion=OfertaVideojuego.EstadoPublicacion.RETIRADO,
+        estado_publicacion_id="retirado",
     )
 
     publicadas = videojuego.ofertas.publicadas()
@@ -192,7 +192,7 @@ def test_disponible_requiere_publicacion_y_stock(videojuego, plataforma):
     assert oferta.disponible is False
 
     oferta.stock = 3
-    oferta.estado_publicacion = OfertaVideojuego.EstadoPublicacion.RETIRADO
+    oferta.estado_publicacion_id = "retirado"
     assert oferta.disponible is False
 
 

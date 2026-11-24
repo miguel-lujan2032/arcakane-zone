@@ -1,5 +1,6 @@
 """Manejo centralizado de errores y respuestas exitosas de la API."""
 import logging
+import math
 from typing import Any
 
 from django.db import IntegrityError
@@ -17,6 +18,8 @@ from rest_framework.exceptions import (
 )
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
+
+from .throttling import BloqueoLogin
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +85,8 @@ def _codigo_y_mensaje(exc) -> tuple[str, str]:
         return "no_encontrado", "El recurso solicitado no existe."
     if isinstance(exc, MethodNotAllowed):
         return "metodo_no_permitido", "El método HTTP no está permitido para este recurso."
+    if isinstance(exc, BloqueoLogin):
+        return "demasiadas_solicitudes", str(exc.detail)
     if isinstance(exc, Throttled):
         return "demasiadas_solicitudes", "Se superó el límite de solicitudes. Intenta más tarde."
     if isinstance(exc, ErrorDeNegocio):
@@ -132,4 +137,7 @@ def api_exception_handler(exc, context):
     if detalles:
         payload["error"]["details"] = detalles
     response.data = payload
+    if isinstance(exc, Throttled) and getattr(exc, "wait", None) is not None:
+        # DRF ya lo hace, pero lo reforzamos para no perderlo al reemplazar data.
+        response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
     return response

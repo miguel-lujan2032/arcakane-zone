@@ -8,6 +8,7 @@ from soporte.models import Contacto
 from ..exceptions import respuesta_exitosa
 from ..permissions import PermisoContacto
 from ..serializers import ContactoSerializer, SolicitudInformacionSerializer
+from ..throttling import AnonimoRateThrottle, ContactoRateThrottle, UsuarioRateThrottle
 from ..utils import es_administrador
 
 
@@ -15,6 +16,17 @@ class ContactoViewSet(viewsets.ModelViewSet):
     serializer_class = ContactoSerializer
     permission_classes = [PermisoContacto]
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
+
+    def get_throttles(self):
+        # Solo la creación pública entra en el scope `contacto`; la gestión
+        # administrativa sigue con los throttles globales anon/user.
+        if self.action == "create":
+            return [
+                ContactoRateThrottle(),
+                AnonimoRateThrottle(),
+                UsuarioRateThrottle(),
+            ]
+        return super().get_throttles()
 
     def get_queryset(self):
         queryset = Contacto.objects.select_related("usuario")
@@ -41,6 +53,7 @@ class ContactoViewSet(viewsets.ModelViewSet):
 
 class MayorInformacionView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ContactoRateThrottle, AnonimoRateThrottle, UsuarioRateThrottle]
 
     def post(self, request):
         serializer = SolicitudInformacionSerializer(data=request.data)

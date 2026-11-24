@@ -109,6 +109,8 @@ curl -s -X POST http://localhost:5173/api/v1/auth/login/ \
 - Respuestas: `{"success": true, "data": ...}`; errores:
   `{"success": false, "error": {"code", "message", "details"}}`.
 - Autenticación: token de DRF o sesión de Django con `X-CSRFToken`.
+- Recuperación: `POST /api/v1/auth/password-reset/` y `/password-reset/confirm/`;
+  el correo apunta a `FRONTEND_BASE_URL` + `PASSWORD_RESET_FRONTEND_PATH`.
 - Contrato completo: [`docs/api/API.md`](docs/api/API.md).
 - El frontend consulta `/api/v1/health/` para mostrar el estado de la API.
 
@@ -170,6 +172,13 @@ Toda la configuración está centralizada en el `.env` de la raíz. El Compose n
 | PostgreSQL | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_PUBLISHED_PORT` |
 | pgAdmin | `PGADMIN_DEFAULT_EMAIL`, `PGADMIN_DEFAULT_PASSWORD`, `PGADMIN_PORT`, `PGADMIN_PUBLISHED_PORT`, `PGADMIN_MASTER_PASSWORD_REQUIRED` |
 | Frontend | `FRONTEND_PORT`, `FRONTEND_PUBLISHED_PORT`, `VITE_API_BASE_URL` |
+| Throttling / caché | `CACHE_TABLE`, `REDIS_URL`, `THROTTLE_NUM_PROXIES`, `THROTTLE_RATE_*`, `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_FAILURE_WINDOW_SECONDS`, `LOGIN_LOCKOUT_SECONDS` |
+| Correo / recuperación | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `EMAIL_USE_SSL`, `EMAIL_TIMEOUT`, `DEFAULT_FROM_EMAIL`, `PASSWORD_RESET_TIMEOUT`, `FRONTEND_BASE_URL`, `PASSWORD_RESET_FRONTEND_PATH`, `PASSWORD_RESET_MAX_EMAILS_PER_HOUR` |
+
+Los contadores de la API usan una tabla de PostgreSQL (`django_cache`) creada
+automáticamente por el entrypoint con `createcachetable`; para usar Redis
+define `REDIS_URL` (requiere el paquete `redis`). Las respuestas `429` llevan
+cabecera `Retry-After`; el contrato está en [`docs/api/API.md`](docs/api/API.md).
 
 Los valores de `.env.example` son ficticios y solo ilustran el formato. En producción usa secretos reales gestionados fuera del repositorio.
 

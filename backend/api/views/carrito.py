@@ -24,7 +24,7 @@ from ..serializers import (
 
 def _carrito_pendiente(usuario):
     return (
-        Pedido.objects.filter(cliente=usuario, estado=Pedido.Estado.PENDIENTE)
+        Pedido.objects.filter(cliente=usuario, estado_id="pendiente")
         .prefetch_related("detalles__oferta__videojuego", "detalles__oferta__plataforma")
         .first()
     )
@@ -37,7 +37,7 @@ def _detalle_del_carrito(usuario, pk):
         ).get(
             pk=pk,
             pedido__cliente=usuario,
-            pedido__estado=Pedido.Estado.PENDIENTE,
+            pedido__estado_id="pendiente",
         )
     except DetallePedido.DoesNotExist as exc:
         raise NotFound("El ítem del carrito no existe.") from exc
@@ -47,7 +47,7 @@ def _serializar_carrito(pedido, request):
     if pedido is None:
         return {
             "id": None,
-            "estado": Pedido.Estado.PENDIENTE,
+            "estado": "pendiente",
             "total": "0.00",
             "total_items": 0,
             "detalles": [],

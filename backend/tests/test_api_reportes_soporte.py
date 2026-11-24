@@ -5,7 +5,6 @@ import pytest
 from rest_framework.test import APIClient
 
 from pagos.models import Venta
-from pedidos.models import Pedido
 from soporte.models import Contacto
 
 pytestmark = pytest.mark.django_db
@@ -48,10 +47,14 @@ def test_reportes_rechazan_clientes(usuario_cliente, url):
 
 
 def test_dashboard_resume_ventas_pedidos_y_stock(
-    usuario_admin, pedido_con_item, oferta_agotada
+    usuario_admin, pedido_con_item, oferta_agotada, intento_aprobado
 ):
-    Venta.objects.create(pedido=pedido_con_item, total=Decimal("160000"))
-    pedido_con_item.estado = Pedido.Estado.PAGADO
+    Venta.objects.create(
+        pedido=pedido_con_item,
+        intento_aprobado=intento_aprobado,
+        total=Decimal("160000"),
+    )
+    pedido_con_item.estado_id = "pagado"
     pedido_con_item.save(update_fields=["estado"])
 
     response = _auth(usuario_admin).get("/api/v1/reportes/dashboard/")
@@ -76,8 +79,14 @@ def test_reporte_ventas_valida_fechas(usuario_admin):
     assert rango_invalido.status_code == 400
 
 
-def test_reporte_ventas_devuelve_resumen_y_resultados(usuario_admin, pedido_con_item):
-    Venta.objects.create(pedido=pedido_con_item, total=Decimal("160000"))
+def test_reporte_ventas_devuelve_resumen_y_resultados(
+    usuario_admin, pedido_con_item, intento_aprobado
+):
+    Venta.objects.create(
+        pedido=pedido_con_item,
+        intento_aprobado=intento_aprobado,
+        total=Decimal("160000"),
+    )
 
     response = _auth(usuario_admin).get("/api/v1/reportes/ventas/")
 

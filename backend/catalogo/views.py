@@ -7,7 +7,8 @@ def lista_videojuegos(request):
     ofertas = (
         OfertaVideojuego.objects.publicadas()
         .filter(videojuego__activo=True)
-        .select_related("videojuego", "plataforma", "videojuego__categoria", "videojuego__genero")
+        .select_related("videojuego", "plataforma")
+        .prefetch_related("videojuego__categorias", "videojuego__generos")
     )
     categorias = Categoria.objects.filter(activo=True)
     plataformas = Plataforma.objects.filter(activo=True)
@@ -20,11 +21,11 @@ def lista_videojuegos(request):
     busqueda = request.GET.get("q", "").strip()
 
     if categoria_id:
-        ofertas = ofertas.filter(videojuego__categoria_id=categoria_id)
+        ofertas = ofertas.filter(videojuego__categorias__id=categoria_id).distinct()
     if plataforma_id:
         ofertas = ofertas.filter(plataforma_id=plataforma_id)
     if genero_id:
-        ofertas = ofertas.filter(videojuego__genero_id=genero_id)
+        ofertas = ofertas.filter(videojuego__generos__id=genero_id).distinct()
     if busqueda:
         ofertas = ofertas.filter(videojuego__titulo__icontains=busqueda)
 

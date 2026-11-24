@@ -11,7 +11,7 @@ from .services import procesar_pago_simulado
 @login_required
 def checkout(request, pedido_id):
     pedido = get_object_or_404(
-        Pedido, pk=pedido_id, cliente=request.user, estado=Pedido.Estado.PENDIENTE
+        Pedido, pk=pedido_id, cliente=request.user, estado_id="pendiente"
     )
     errores = validar_para_checkout(pedido)
     if errores:
@@ -29,7 +29,7 @@ def procesar_pago(request, pedido_id):
         return redirect("pagos:checkout", pedido_id=pedido_id)
 
     pedido = get_object_or_404(
-        Pedido, pk=pedido_id, cliente=request.user, estado=Pedido.Estado.PENDIENTE
+        Pedido, pk=pedido_id, cliente=request.user, estado_id="pendiente"
     )
     # Re-validar stock justo antes de cobrar
     errores = validar_para_checkout(pedido)

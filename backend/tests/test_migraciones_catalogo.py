@@ -17,13 +17,16 @@ from catalogo.models import (
     OfertaVideojuego,
     Plataforma,
     Videojuego,
+    VideojuegoCategoria,
+    VideojuegoGenero,
 )
 from pedidos.models import DetallePedido, Pedido
 
 ANTES = [("catalogo", "0001_initial"), ("pedidos", "0001_initial")]
 DESPUES = [
-    ("catalogo", "0002_ofertavideojuego"),
-    ("pedidos", "0002_detallepedido_oferta"),
+    ("catalogo", "0012_oferta_estado_definitivo"),
+    ("pedidos", "0008_pedido_estado_definitivo"),
+    ("pagos", "0007_pago_estado_definitivo"),
 ]
 
 
@@ -101,7 +104,7 @@ def test_migracion_traslada_estado_no_publicado(usuario_cliente):
     _migrate(DESPUES)
 
     oferta = OfertaVideojuego.objects.get(videojuego__titulo="Juego Retirado")
-    assert oferta.estado_publicacion == OfertaVideojuego.EstadoPublicacion.RETIRADO
+    assert oferta.estado_publicacion_id == "retirado"
     assert vj.pk is not None
 
 
@@ -141,7 +144,15 @@ def test_migracion_reasigna_detalles_a_la_oferta(usuario_cliente):
 
     pedido = Pedido.objects.get(pk=pedido_viejo.pk)
     detalle = pedido.detalles.get()
-    assert detalle.oferta.videojuego.titulo == "Juego Comprado"
+    # El estado DESPUES termina en catalogo.0012: el modelo actual de
+    # Videojuego ya incluye clasificacion_edad (0013), así que el título se
+    # consulta con el modelo histórico de ese punto de la cadena.
+    apps_despues = _apps_at(DESPUES)
+    VideojuegoDespues = apps_despues.get_model("catalogo", "Videojuego")
+    assert (
+        VideojuegoDespues.objects.get(pk=detalle.oferta.videojuego_id).titulo
+        == "Juego Comprado"
+    )
     assert detalle.oferta.precio_vigente == Decimal("50000.00")
     # El detalle conserva su precio unitario histórico y congela el snapshot.
     assert detalle.precio_unitario == Decimal("45000.00")
@@ -170,9 +181,9 @@ def test_migraciones_desde_cero_aplican_limpio(usuario_cliente):
     categoria = Categoria.objects.create(nombre="Acción")
     genero = Genero.objects.create(nombre="RPG")
     plataforma = Plataforma.objects.create(nombre="PC")
-    videojuego = Videojuego.objects.create(
-        titulo="Juego Desde Cero", categoria=categoria, genero=genero
-    )
+    videojuego = Videojuego.objects.create(titulo="Juego Desde Cero")
+    VideojuegoCategoria.objects.create(videojuego=videojuego, categoria=categoria)
+    VideojuegoGenero.objects.create(videojuego=videojuego, genero=genero)
     oferta = OfertaVideojuego.objects.create(
         videojuego=videojuego,
         plataforma=plataforma,
@@ -181,7 +192,7 @@ def test_migraciones_desde_cero_aplican_limpio(usuario_cliente):
         stock=2,
     )
     pedido = Pedido.objects.create(
-        cliente=usuario_cliente, estado=Pedido.Estado.PENDIENTE
+        cliente=usuario_cliente, estado_id="pendiente"
     )
     detalle = DetallePedido.objects.create(
         pedido=pedido, oferta=oferta, cantidad=1,

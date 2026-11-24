@@ -15,6 +15,8 @@ from .views.auth import (
     LoginView,
     LogoutView,
     MeView,
+    PasswordResetConfirmView,
+    PasswordResetView,
     RegistroView,
 )
 from .views.base import ApiNotFoundView, ApiRootView, HealthView
@@ -64,6 +66,16 @@ urlpatterns = [
         name="auth-cambiar-password",
     ),
     path("auth/csrf/", CsrfView.as_view(), name="auth-csrf"),
+    path(
+        "auth/password-reset/",
+        PasswordResetView.as_view(),
+        name="auth-password-reset",
+    ),
+    path(
+        "auth/password-reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="auth-password-reset-confirm",
+    ),
     # Carrito
     path("carrito/", CarritoView.as_view(), name="carrito"),
     path("carrito/items/", CarritoItemsView.as_view(), name="carrito-items"),

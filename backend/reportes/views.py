@@ -13,8 +13,9 @@ UMBRAL_BAJO_STOCK = 5
 
 def _ofertas_catalogo():
     """Ofertas del catálogo con su contexto de videojuego precargado."""
-    return OfertaVideojuego.objects.select_related(
-        "videojuego", "plataforma", "videojuego__categoria", "videojuego__genero"
+    return (
+        OfertaVideojuego.objects.select_related("videojuego", "plataforma")
+        .prefetch_related("videojuego__categorias", "videojuego__generos")
     )
 
 
@@ -105,7 +106,7 @@ def reporte_inventario(request):
             stock__gt=UMBRAL_BAJO_STOCK, videojuego__activo=True
         )
     elif filtro == "inactivas":
-        ofertas = ofertas.exclude(estado_publicacion=OfertaVideojuego.EstadoPublicacion.PUBLICADO)
+        ofertas = ofertas.exclude(estado_publicacion_id="publicado")
 
     contexto = {
         "ofertas": ofertas,
@@ -136,9 +137,9 @@ def reporte_videojuegos(request):
     disponibilidad = request.GET.get("disponibilidad", "")
 
     if categoria_id:
-        ofertas = ofertas.filter(videojuego__categoria_id=categoria_id)
+        ofertas = ofertas.filter(videojuego__categorias__id=categoria_id).distinct()
     if genero_id:
-        ofertas = ofertas.filter(videojuego__genero_id=genero_id)
+        ofertas = ofertas.filter(videojuego__generos__id=genero_id).distinct()
     if plataforma_id:
         ofertas = ofertas.filter(plataforma_id=plataforma_id)
     if estado == "activo":

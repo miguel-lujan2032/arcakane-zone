@@ -77,7 +77,7 @@
         {% if o.stock == 0 and o.esta_publicada %}bg-red-950/30
         {% elif o.stock <= umbral and o.stock > 0 and o.esta_publicada %}bg-yellow-950/30{% endif %}">
         <td class="px-4 py-3 font-medium text-gray-100">{{ o.videojuego.titulo }}</td>
-        <td class="px-4 py-3 text-gray-400">{{ o.videojuego.categoria }}</td>
+        <td class="px-4 py-3 text-gray-400">{% for c in o.videojuego.categorias.all %}{{ c.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
         <td class="px-4 py-3 text-gray-400">{{ o.plataforma }}</td>
         <td class="px-4 py-3 text-center font-mono font-bold
           {% if o.stock == 0 %}text-red-400
@@ -88,7 +88,7 @@
         <td class="px-4 py-3 text-center">
           {% if o.esta_publicada %}
             <span class="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">Publicada</span>
-          {% elif o.estado_publicacion == 'borrador' %}
+          {% elif o.estado_publicacion_id == 'borrador' %}
             <span class="text-xs bg-yellow-900 text-yellow-300 px-2 py-0.5 rounded-full">Borrador</span>
           {% else %}
             <span class="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">Retirada</span>

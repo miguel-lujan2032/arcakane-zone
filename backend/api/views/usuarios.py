@@ -19,10 +19,10 @@ class UsuarioViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["username"]
 
     def get_queryset(self):
-        queryset = Usuario.objects.select_related("rol")
+        queryset = Usuario.objects.prefetch_related("roles")
         params = self.request.query_params
         if params.get("rol"):
-            queryset = queryset.filter(rol_id=params["rol"])
+            queryset = queryset.filter(roles__id=params["rol"]).distinct()
         if params.get("activo") is not None:
             queryset = queryset.filter(is_active=parse_bool(params.get("activo")))
         return queryset
